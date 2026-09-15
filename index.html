@@ -356,12 +356,16 @@
   .ovl{position:fixed;inset:0;background:rgba(29,29,31,.42);backdrop-filter:blur(14px);
     -webkit-backdrop-filter:blur(14px);display:flex;align-items:center;justify-content:center;z-index:80;padding:24px}
   .dlg{background:#fff;border:1px solid var(--line);border-radius:var(--r-lg);
-    width:min(480px,100%);overflow:hidden}
+    width:min(480px,100%);overflow:hidden;
+    /* 내용이 길어져도 [취소]·[확인] 버튼이 화면 밖으로 밀려나지 않게 한다 */
+    max-height:calc(100vh - 48px);display:flex;flex-direction:column}
   .dlg h3{margin:0;padding:20px 24px;border-bottom:1px solid var(--line-soft);
     font-size:21px;font-weight:600;letter-spacing:-.374px}
-  .dlg .c{padding:22px 24px;display:flex;flex-direction:column;gap:16px}
+  .dlg h3{flex:none}
+  .dlg .c{padding:22px 24px;display:flex;flex-direction:column;gap:16px;
+    overflow-y:auto;min-height:0}
   .dlg .f{padding:16px 24px;border-top:1px solid var(--line-soft);background:var(--pearl);
-    display:flex;gap:10px;justify-content:flex-end}
+    display:flex;gap:10px;justify-content:flex-end;flex:none}
   .dlg textarea{resize:vertical;min-height:84px;line-height:1.47}
   .err{background:var(--danger-soft);color:var(--danger);border-radius:var(--r-md);
     padding:11px 14px;font-size:14px;letter-spacing:-.224px;line-height:1.5}
@@ -369,6 +373,15 @@
     padding:11px 14px;font-size:14px;letter-spacing:-.224px}
   .balbox{background:var(--pearl);border:1px solid var(--line-soft);border-radius:var(--r-md);
     padding:12px 16px;font-size:14px;display:flex;gap:16px;flex-wrap:wrap;letter-spacing:-.224px}
+
+  /* ---------- AI 문구 추천 (반려 모달) ---------- */
+  .sug{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .sug button{text-align:left;background:var(--pearl);border:1px solid var(--line-soft);
+    border-radius:var(--r-md);padding:11px 14px;font:inherit;font-size:14px;line-height:1.5;
+    color:var(--ink);letter-spacing:-.224px;cursor:pointer}
+  .sug button:hover{border-color:var(--accent);background:#fff}
+  .sug-note{font-size:12px;color:var(--ink-3);margin-top:8px;letter-spacing:-.224px}
+  .ai-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
   .balbox b{font-variant-numeric:tabular-nums;font-weight:600}
 </style>
 
@@ -1039,10 +1052,19 @@ function reject(id){
   var l = state.leaves.filter(function(x){return x.id===id;})[0];
   if(!l || l.status!=='대기') return;
   var e = EMP[l.empId];
-  openModal('휴가 반려 — '+e.name+' '+e.rank,
+  var bal = leaveBal(l.empId);
+
+  var ovl = openModal('휴가 반려 — '+e.name+' '+e.rank,
     '<div style="font-size:14px;line-height:1.5;color:var(--ink-2)">'+esc(l.type)+' · '+esc(l.start)+
       (l.end!==l.start?' ~ '+esc(l.end):'')+' ('+l.days+'일)<br>신청 사유: '+esc(l.reason)+'</div>'+
-    '<label class="f">반려 사유 <span style="color:var(--danger)">*</span>'+
+    '<label class="f" style="margin-top:14px">왜 반려하나요? <span style="font-weight:400;color:var(--ink-3)">(선택 · AI 추천에만 쓰입니다)</span>'+
+      '<input type="text" id="rjNote" placeholder="예: 9/18 분기 결산 마감이라 팀 인원이 빠지면 안 됨"></label>'+
+    '<div class="ai-row">'+
+      '<button type="button" class="btn sm" id="rjAi">AI 문구 추천</button>'+
+      '<span class="sug-note" style="margin:0">상황에 맞는 반려 사유 3개를 받아 봅니다</span>'+
+    '</div>'+
+    '<div id="rjSug"></div>'+
+    '<label class="f" style="margin-top:14px">반려 사유 <span style="color:var(--danger)">*</span>'+
       '<textarea id="rjTxt" placeholder="예: 같은 날 팀 필수 인원 미달"></textarea></label>'+
     '<div id="rjMsg"></div>',
     '반려 처리',
@@ -1052,6 +1074,58 @@ function reject(id){
       l.status='반려'; l.actDate=TODAY; l.approver='교육생(인사담당)'; l.comment=t;
       save(); close(); toast(e.name+' 사원의 휴가를 반려했습니다.'); render();
     });
+
+  bindRejectAi(ovl, l, e, bal);
+}
+
+/* 반려 사유 문구를 AI 에게 3개 받아 고르게 한다.
+   고른 문장은 그대로 쓰는 게 아니라 위 칸에 채워 넣고 담당자가 고쳐 쓴다. */
+function bindRejectAi(ovl, l, e, bal){
+  var btn = ovl.querySelector('#rjAi');
+  var box = ovl.querySelector('#rjSug');
+  var txt = ovl.querySelector('#rjTxt');
+
+  btn.onclick = function(){
+    btn.disabled = true; btn.textContent = '받는 중…';
+    box.innerHTML = '<div class="sug-note">Gemini 에 물어보는 중입니다…</div>';
+
+    fetch('/api/leave-reason', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        name:e.name, dept:e.dept, rank:e.rank,
+        type:l.type, start:l.start, end:l.end, days:l.days,
+        reason:l.reason, remain:bal.remain,
+        note: ovl.querySelector('#rjNote').value
+      })
+    })
+    .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, j:j }; }); })
+    .then(function(r){
+      if(!r.ok || !r.j.ok){
+        box.innerHTML = '<div class="err">'+esc(r.j.message || '문구를 받지 못했습니다.')+'</div>';
+        return;
+      }
+      var h = '<div class="sug">';
+      r.j['후보'].forEach(function(s, i){
+        h += '<button type="button" data-sug="'+i+'">'+esc(s)+'</button>';
+      });
+      h += '</div><div class="sug-note">누르면 아래 칸에 채워집니다. 그대로 쓰지 말고 상황에 맞게 고쳐 주세요. · '+esc(r.j['모델'])+'</div>';
+      box.innerHTML = h;
+
+      Array.prototype.forEach.call(box.querySelectorAll('[data-sug]'), function(b){
+        b.onclick = function(){
+          txt.value = r.j['후보'][+b.getAttribute('data-sug')];
+          txt.focus();
+          toast('반려 사유에 넣었습니다. 고쳐서 쓰세요.');
+        };
+      });
+    })
+    .catch(function(){
+      box.innerHTML = '<div class="err">서버에 닿지 못했습니다. '+
+        'index.html 을 더블클릭해 연 경우에는 AI 추천을 쓸 수 없습니다.</div>';
+    })
+    .then(function(){ btn.disabled = false; btn.textContent = 'AI 문구 추천'; });
+  };
 }
 function giveBack(id){
   var n = state.loans.filter(function(x){return x.id===id;})[0];
