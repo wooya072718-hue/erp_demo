@@ -50,19 +50,11 @@
   button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
   :focus-visible{outline:2px solid var(--accent-focus);outline-offset:2px}
 
-  /* ---------- 무지개 띠 (배포가 반영됐는지 눈으로 확인하는 표식) ---------- */
-  .rainbow-bar{
-    height:5px;position:sticky;top:0;z-index:51;
-    background:linear-gradient(90deg,
-      #e5484d 0%, #f5a623 17%, #f5d90a 33%,
-      #30a46c 50%, #0066cc 67%, #3e63dd 83%, #8e4ec6 100%);
-  }
-
   /* ---------- 교육용 안내 띠 (다크 타일 + Apple sticky bar의 backdrop blur) ---------- */
   .edu-banner{
     background:var(--tile-1);color:var(--on-dark-soft);
     padding:11px 24px;font-size:14px;font-weight:400;letter-spacing:-.224px;
-    display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:5px;z-index:50;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;position:sticky;top:0;z-index:50;
   }
   @supports ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
     .edu-banner{background:rgba(39,39,41,.82);
@@ -74,7 +66,7 @@
   .edu-banner span{opacity:.72;font-size:13px}
 
   /* ---------- 레이아웃 ---------- */
-  .shell{display:flex;min-height:calc(100vh - 51px)}
+  .shell{display:flex;min-height:calc(100vh - 46px)}
   nav.side{width:236px;flex:0 0 236px;background:var(--tile-1);color:var(--on-dark-soft);
     display:flex;flex-direction:column;padding:26px 0 20px}
   .brand{padding:0 22px 20px;border-bottom:1px solid rgba(255,255,255,.10);margin-bottom:16px}
@@ -206,8 +198,6 @@
 </head>
 <body>
 
-<div class="rainbow-bar"></div>
-
 <div class="edu-banner" id="eduBanner">
   <b>교육용</b>
   ⚠️ 이 화면의 모든 회사·직원·자산 정보는 학습용으로 지어낸 <u>가상 자료</u>입니다.
@@ -224,8 +214,7 @@
     <div class="navlist" id="nav"></div>
     <div class="side-foot">
       기준일 <b id="todayTxt">-</b><br>
-      담당자 경영지원팀 (교육생)<br>
-      <span style="opacity:.55">빌드 rainbow-1</span>
+      담당자 경영지원팀 (교육생)
     </div>
   </nav>
   <main id="view"></main>
